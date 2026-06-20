@@ -260,7 +260,6 @@ export default function App() {
       <div className={styles.container}>
         <div className={styles.header}>
           <h1 className={styles.title}>Régularisation URSSAF TNS 2025</h1>
-          <span className={styles.badge}>BMH</span>
         </div>
         <div className={styles.card}>
           <div className={styles.tabs}>
@@ -278,3 +277,4 @@ export default function App() {
     </div>
   )
 }
+
