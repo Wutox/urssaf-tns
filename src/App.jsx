@@ -49,9 +49,8 @@ function getAFTaux(remun) {
   return 0.031
 }
 
-function computeAll(remun, div, comptValues) {
-  const totalCompt = Object.values(comptValues).reduce((a, b) => a + b, 0)
-  const totalBase = remun + div + totalCompt
+function computeOnce(remun, div, cotisB4) {
+  const totalBase = remun + div + cotisB4
   let abt = totalBase * ABATTEMENT
   if (abt > PASS * PLAFOND_ABT) abt = PASS * PLAFOND_ABT
   if (abt < PASS * PLANCHER_ABT) abt = PASS * PLANCHER_ABT
@@ -84,8 +83,19 @@ function computeAll(remun, div, comptValues) {
   const bases = { mal1:malBase1, mal2:malBase2, ij:ijBase, af:sb, ret1:retBase1, ret2:retBase2, retc1:retcBase1, retc2:retcBase2, inv:invBase, csgd:sb, csgnd:sb, cfp:PASS }
   const taux = { mal1:malTaux1, mal2:0.065, ij:0.005, af:afTaux, ret1:0.1715, ret2:0.0072, retc1:0.081, retc2:0.091, inv:0.013, csgd:0.068, csgnd:0.029, cfp:0.0025 }
   const totalAVerser = Object.values(cots).reduce((a, b) => a + b, 0)
+  return { sb, totalBase, totalAVerser, case1gb: remun + csgndCot, caseDsca: malCot1+malCot2+ijCot+afCot+retCot1+retCot2+retcCot1+retcCot2+invCot, cots, bases, taux }
+}
 
-  return { sb, totalBase, totalCompt, totalAVerser, case1gb: remun + csgndCot, caseDsca: malCot1+malCot2+ijCot+afCot+retCot1+retCot2+retcCot1+retcCot2+invCot, cots, bases, taux }
+function computeAll(remun, div, comptValues) {
+  const totalCompt = Object.values(comptValues).reduce((a, b) => a + b, 0)
+  // Calcul itératif : B4 = D26 (cotisations à verser), convergence en ~20 itérations
+  let result = computeOnce(remun, div, totalCompt)
+  for (let i = 0; i < 100; i++) {
+    const next = computeOnce(remun, div, result.totalAVerser)
+    if (Math.abs(next.totalAVerser - result.totalAVerser) < 0.01) { result = next; break }
+    result = next
+  }
+  return { ...result, totalCompt, totalBase: remun + div + result.totalAVerser }
 }
 
 function Tab1({ remun, div, setRemun, setDiv, compt, setCompt }) {
@@ -277,4 +287,5 @@ export default function App() {
     </div>
   )
 }
+
 
