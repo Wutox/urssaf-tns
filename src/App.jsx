@@ -9,7 +9,7 @@ const PLANCHER_ABT = 0.0176
 
 const DEFAULT_COMPT = {
   mal1: 3863, mal2: 0, ij: 288, af: 738,
-  ret1: 8360, ret2: 63, retc1: 3072, retc2: 1101,
+  ret1: 8360, retc1: 3072, retc2: 1101,
   inv: 612, csgd: 4851, csgnd: 2069, cfp: 118,
 }
 
@@ -19,7 +19,6 @@ const ROW_LABELS = {
   ij:    'IJ',
   af:    'AF',
   ret1:  'Retraite base (≤ PASS)',
-  ret2:  'Retraite base (> PASS)',
   retc1: 'Retraite compl. (≤ PASS)',
   retc2: 'Retraite compl. (1–4 PASS)',
   inv:   'Invalidité',
@@ -66,9 +65,7 @@ function computeOnce(remun, div, cotisB4) {
   const afTaux = getAFTaux(remun)
   const afCot  = sb * afTaux
   const retBase1 = sb < PASS*0.1135 ? PASS*0.1135 : (sb > PASS ? PASS : sb)
-  const retCot1  = retBase1 * 0.1715
-  const retBase2 = sb > retBase1 ? sb - retBase1 : 0
-  const retCot2  = retBase2 * 0.0072
+  const retCot1  = retBase1 * 0.1787
   const retcBase1 = sb > PASS ? PASS : sb
   const retcCot1  = retcBase1 * 0.081
   const retcBase2 = sb > PASS*4 ? PASS*3 : (sb > PASS ? sb - PASS : 0)
@@ -79,11 +76,11 @@ function computeOnce(remun, div, cotisB4) {
   const csgndCot = sb * 0.029
   const cfpCot   = PASS * 0.0025
 
-  const cots = { mal1:malCot1, mal2:malCot2, ij:ijCot, af:afCot, ret1:retCot1, ret2:retCot2, retc1:retcCot1, retc2:retcCot2, inv:invCot, csgd:csgdCot, csgnd:csgndCot, cfp:cfpCot }
-  const bases = { mal1:malBase1, mal2:malBase2, ij:ijBase, af:sb, ret1:retBase1, ret2:retBase2, retc1:retcBase1, retc2:retcBase2, inv:invBase, csgd:sb, csgnd:sb, cfp:PASS }
-  const taux = { mal1:malTaux1, mal2:0.065, ij:0.005, af:afTaux, ret1:0.1715, ret2:0.0072, retc1:0.081, retc2:0.091, inv:0.013, csgd:0.068, csgnd:0.029, cfp:0.0025 }
+  const cots = { mal1:malCot1, mal2:malCot2, ij:ijCot, af:afCot, ret1:retCot1, retc1:retcCot1, retc2:retcCot2, inv:invCot, csgd:csgdCot, csgnd:csgndCot, cfp:cfpCot }
+  const bases = { mal1:malBase1, mal2:malBase2, ij:ijBase, af:sb, ret1:retBase1, retc1:retcBase1, retc2:retcBase2, inv:invBase, csgd:sb, csgnd:sb, cfp:PASS }
+  const taux = { mal1:malTaux1, mal2:0.065, ij:0.005, af:afTaux, ret1:0.1787, retc1:0.081, retc2:0.091, inv:0.013, csgd:0.068, csgnd:0.029, cfp:0.0025 }
   const totalAVerser = Object.values(cots).reduce((a, b) => a + b, 0)
-  return { sb, totalBase, totalAVerser, case1gb: remun + csgndCot, caseDsca: malCot1+malCot2+ijCot+afCot+retCot1+retCot2+retcCot1+retcCot2+invCot, cots, bases, taux }
+  return { sb, totalBase, totalAVerser, case1gb: remun + csgndCot, caseDsca: malCot1+malCot2+ijCot+afCot+retCot1+retcCot1+retcCot2+invCot, cots, bases, taux }
 }
 
 function computeAll(remun, div, comptValues) {
@@ -226,8 +223,7 @@ function Tab2() {
               <tr><td>Maladie (&gt; 5 PASS)</td><td>Supérieur à 5 × PASS</td><td className={styles.right}>6,50%</td></tr>
               <tr><td>IJ</td><td>Revenu dans la limite de 5 × PASS</td><td className={styles.right}>0,50%</td></tr>
               <tr><td>AF</td><td>Total rémunération</td><td className={styles.right}>3,10%</td></tr>
-              <tr><td>Retraite base</td><td>PASS (minimum 40% PASS)</td><td className={styles.right}>17,15%</td></tr>
-              <tr><td>Retraite base (&gt; PASS)</td><td>Total rémunération − PASS</td><td className={styles.right}>0,72%</td></tr>
+              <tr><td>Retraite base</td><td>PASS (minimum 40% PASS)</td><td className={styles.right}>17,87%</td></tr>
               <tr><td>Retraite complémentaire</td><td>PASS</td><td className={styles.right}>8,10%</td></tr>
               <tr><td>Retraite complémentaire</td><td>4 × PASS − 1 × PASS</td><td className={styles.right}>9,10%</td></tr>
               <tr><td>Invalidité</td><td>PASS</td><td className={styles.right}>1,30%</td></tr>
@@ -287,5 +283,6 @@ export default function App() {
     </div>
   )
 }
+
 
 
