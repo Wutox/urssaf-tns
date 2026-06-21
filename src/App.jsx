@@ -255,7 +255,7 @@ function Tab1({ remun, div, setRemun, setDiv, compt, setCompt, regime }) {
   )
 }
 
-function Tab2() {
+function Tab2({ regime }) {
   return (
     <div>
       <div className={styles.refSection}>
@@ -282,11 +282,13 @@ function Tab2() {
               <tr><td>Maladie (&gt; 5 PASS)</td><td>Supérieur à 5 × PASS</td><td className={styles.right}>6,50%</td></tr>
               <tr><td>IJ</td><td>Revenu dans la limite de 5 × PASS</td><td className={styles.right}>0,50%</td></tr>
               <tr><td>AF</td><td>Total rémunération</td><td className={styles.right}>3,10%</td></tr>
+              {(!regime || regime === 'URSSAF RSI') && <>
               <tr><td>Retraite base</td><td>PASS (minimum 40% PASS)</td><td className={styles.right}>17,87%</td></tr>
               <tr><td>Retraite base (&gt; PASS)</td><td>Total rémunération − PASS</td><td className={styles.right}>0,72%</td></tr>
               <tr><td>Retraite complémentaire</td><td>PASS</td><td className={styles.right}>8,10%</td></tr>
               <tr><td>Retraite complémentaire</td><td>4 × PASS − 1 × PASS</td><td className={styles.right}>9,10%</td></tr>
               <tr><td>Invalidité</td><td>PASS</td><td className={styles.right}>1,30%</td></tr>
+              </>}
               <tr><td>CSG déductible</td><td>Total rémunération + cotisations</td><td className={styles.right}>6,80%</td></tr>
               <tr><td>CSG non déductible</td><td>Total rémunération + cotisations</td><td className={styles.right}>2,90%</td></tr>
               <tr><td>CFP</td><td>PASS</td><td className={styles.right}>0,25%</td></tr>
@@ -294,6 +296,24 @@ function Tab2() {
           </table>
         </div>
       </div>
+      {regime === 'URSSAF CAVEC' && (
+        <div className={styles.refSection}>
+          <div className={styles.sectionTitle}>Cotisations CAVEC</div>
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead><tr><th>Cotisation</th><th>Base de cotisation</th><th className={styles.right}>Taux</th></tr></thead>
+              <tbody>
+                <tr><td>Retraite base</td><td>PASS (minimum 40% PASS)</td><td className={styles.right}>17,87%</td></tr>
+                <tr><td>Retraite base (&gt; PASS)</td><td>Total rémunération − PASS</td><td className={styles.right}>0,72%</td></tr>
+                <tr><td>Retraite complémentaire</td><td>PASS</td><td className={styles.right}>8,10%</td></tr>
+                <tr><td>Retraite complémentaire</td><td>4 × PASS − 1 × PASS</td><td className={styles.right}>9,10%</td></tr>
+                <tr><td>Invalidité</td><td>PASS</td><td className={styles.right}>1,30%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className={styles.refSection}>
         <div className={styles.sectionTitle}>Barème progressif maladie</div>
         <div className={styles.tableWrap}>
@@ -404,10 +424,11 @@ export default function App() {
           <div className={styles.tabContent}>
             {activeTab === 0
               ? <Tab1 remun={remun} div={div} setRemun={setRemun} setDiv={setDiv} compt={compt} setCompt={setCompt} regime={regime} />
-              : <Tab2 />}
+              : <Tab2 regime={regime} />}
           </div>
         </div>
       </div>
     </div>
   )
 }
+
