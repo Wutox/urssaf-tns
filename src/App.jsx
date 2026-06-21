@@ -13,7 +13,7 @@ const DEFAULT_COMPT = {
   inv: 612, csgd: 4851, csgnd: 2069, cfp: 118,
 }
 
-const ROW_LABELS = {
+const ROW_LABELS_URSSAF = {
   mal1:  'Maladie (≤ 235 500 €)',
   mal2:  'Maladie (> 235 500 €)',
   ij:    'IJ',
@@ -26,6 +26,24 @@ const ROW_LABELS = {
   csgd:  'CSG déductible',
   csgnd: 'CSG non déductible',
   cfp:   'CFP',
+}
+
+const ROW_LABELS_RSI = {
+  mal1:  'Maladie (≤ 235 500 €)',
+  mal2:  'Maladie (> 235 500 €)',
+  ij:    'IJ',
+  af:    'AF',
+  csgd:  'CSG déductible',
+  csgnd: 'CSG non déductible',
+  cfp:   'CFP',
+}
+
+const ROW_LABELS_CAVEC = {
+  ret1:  'Retraite base (≤ PASS)',
+  ret2:  'Retraite base (> PASS)',
+  retc1: 'Retraite compl. (≤ PASS)',
+  retc2: 'Retraite compl. (1–4 PASS)',
+  inv:   'Invalidité',
 }
 
 function fmt(n) {
@@ -98,7 +116,70 @@ function computeAll(remun, div, comptValues) {
   return { ...result, totalCompt, totalBase: remun + div + result.totalAVerser }
 }
 
-function Tab1({ remun, div, setRemun, setDiv, compt, setCompt }) {
+function CotisTable({ rows, cots, bases, taux, compt, setCompt, totalAVerser, totalCompt, totalProv, showTotal, styles }) {
+  const ids = Object.keys(rows)
+  const subtotalAVerser = ids.reduce((s, id) => s + cots[id], 0)
+  const subtotalCompt = ids.reduce((s, id) => s + compt[id], 0)
+  const subtotalProv = subtotalAVerser - subtotalCompt
+  return (
+    <div className={styles.tableWrap}>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Libellé</th>
+            <th className={styles.right}>Base</th>
+            <th className={styles.right}>Taux</th>
+            <th className={styles.right}>À verser</th>
+            <th className={styles.right}>Comptabilisé</th>
+            <th className={styles.right}>Provision</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ids.map(id => {
+            const prov = cots[id] - compt[id]
+            return (
+              <tr key={id}>
+                <td>{rows[id]}</td>
+                <td className={styles.right}>{Math.round(bases[id]).toLocaleString('fr-FR')} €</td>
+                <td className={styles.right}>{(taux[id]*100).toFixed(2)}%</td>
+                <td className={styles.right}>{Math.round(cots[id]).toLocaleString('fr-FR')} €</td>
+                <td className={styles.right}>
+                  <input
+                    className={styles.comptInput}
+                    type="number"
+                    value={compt[id]}
+                    onChange={e => setCompt(prev => ({ ...prev, [id]: parseFloat(e.target.value) || 0 }))}
+                  />
+                </td>
+                <td className={prov < 0 ? styles.red : styles.green}>
+                  {Math.round(prov).toLocaleString('fr-FR')} €
+                </td>
+              </tr>
+            )
+          })}
+          {showTotal && (
+            <tr className={styles.totalRow}>
+              <td colSpan={3}>Total</td>
+              <td className={styles.right}>{Math.round(totalAVerser).toLocaleString('fr-FR')} €</td>
+              <td className={styles.right}>{Math.round(totalCompt).toLocaleString('fr-FR')} €</td>
+              <td className={totalProv < 0 ? styles.red : styles.green}>{Math.round(totalProv).toLocaleString('fr-FR')} €</td>
+            </tr>
+          )}
+          {!showTotal && (
+            <tr className={styles.totalRow}>
+              <td colSpan={3}>Sous-total</td>
+              <td className={styles.right}>{Math.round(subtotalAVerser).toLocaleString('fr-FR')} €</td>
+              <td className={styles.right}>{Math.round(subtotalCompt).toLocaleString('fr-FR')} €</td>
+              <td className={subtotalProv < 0 ? styles.red : styles.green}>{Math.round(subtotalProv).toLocaleString('fr-FR')} €</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function Tab1({ remun, div, setRemun, setDiv, compt, setCompt, regime }) {
   const { sb, totalBase, totalCompt, totalAVerser, case1gb, caseDsca, cots, bases, taux } = computeAll(remun, div, compt)
   const totalProv = totalAVerser - totalCompt
 
@@ -141,50 +222,25 @@ function Tab1({ remun, div, setRemun, setDiv, compt, setCompt }) {
       </div>
 
       <div className={styles.sectionTitle}>Détail des cotisations</div>
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Libellé</th>
-              <th className={styles.right}>Base</th>
-              <th className={styles.right}>Taux</th>
-              <th className={styles.right}>À verser</th>
-              <th className={styles.right}>Comptabilisé</th>
-              <th className={styles.right}>Provision</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.keys(ROW_LABELS).map(id => {
-              const prov = cots[id] - compt[id]
-              return (
-                <tr key={id}>
-                  <td>{ROW_LABELS[id]}</td>
-                  <td className={styles.right}>{Math.round(bases[id]).toLocaleString('fr-FR')} €</td>
-                  <td className={styles.right}>{(taux[id]*100).toFixed(2)}%</td>
-                  <td className={styles.right}>{Math.round(cots[id]).toLocaleString('fr-FR')} €</td>
-                  <td className={styles.right}>
-                    <input
-                      className={styles.comptInput}
-                      type="number"
-                      value={compt[id]}
-                      onChange={e => setCompt(prev => ({ ...prev, [id]: parseFloat(e.target.value) || 0 }))}
-                    />
-                  </td>
-                  <td className={prov < 0 ? styles.red : styles.green}>
-                    {Math.round(prov).toLocaleString('fr-FR')} €
-                  </td>
-                </tr>
-              )
-            })}
-            <tr className={styles.totalRow}>
-              <td colSpan={3}>Total</td>
-              <td className={styles.right}>{Math.round(totalAVerser).toLocaleString('fr-FR')} €</td>
-              <td className={styles.right}>{Math.round(totalCompt).toLocaleString('fr-FR')} €</td>
-              <td className={totalProv < 0 ? styles.red : styles.green}>{Math.round(totalProv).toLocaleString('fr-FR')} €</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <CotisTable
+        rows={regime === 'URSSAF CAVEC' ? ROW_LABELS_RSI : ROW_LABELS_URSSAF}
+        cots={cots} bases={bases} taux={taux} compt={compt} setCompt={setCompt}
+        totalAVerser={totalAVerser} totalCompt={totalCompt} totalProv={totalProv}
+        showTotal={regime !== 'URSSAF CAVEC'}
+        styles={styles}
+      />
+      {regime === 'URSSAF CAVEC' && (
+        <>
+          <div className={styles.sectionTitle} style={{marginTop: '1.5rem'}}>Cotisations CAVEC</div>
+          <CotisTable
+            rows={ROW_LABELS_CAVEC}
+            cots={cots} bases={bases} taux={taux} compt={compt} setCompt={setCompt}
+            totalAVerser={totalAVerser} totalCompt={totalCompt} totalProv={totalProv}
+            showTotal={true}
+            styles={styles}
+          />
+        </>
+      )}
 
       <div className={styles.divider} />
 
@@ -347,7 +403,7 @@ export default function App() {
           </div>
           <div className={styles.tabContent}>
             {activeTab === 0
-              ? <Tab1 remun={remun} div={div} setRemun={setRemun} setDiv={setDiv} compt={compt} setCompt={setCompt} />
+              ? <Tab1 remun={remun} div={div} setRemun={setRemun} setDiv={setDiv} compt={compt} setCompt={setCompt} regime={regime} />
               : <Tab2 />}
           </div>
         </div>
