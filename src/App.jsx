@@ -91,7 +91,7 @@ function getAFTaux(remun) {
   return 0.031
 }
 
-function computeOnce(remun, div, cotisB4) {
+function computeOnce(remun, div, cotisB4, T) {
   const totalBase = remun + div + cotisB4
   let abt = totalBase * ABATTEMENT
   if (abt > PASS * PLAFOND_ABT) abt = PASS * PLAFOND_ABT
@@ -102,24 +102,24 @@ function computeOnce(remun, div, cotisB4) {
   const malTaux1 = getMaladieTaux(sb)
   const malCot1  = malBase1 * malTaux1
   const malBase2 = sb > PASS*3 ? sb - PASS*3 : 0
-  const malCot2  = malBase2 * 0.065
+  const malCot2  = malBase2 * (T.mal2/100)
   const ijBase = sb < PASS*0.4 ? PASS*0.4 : (sb > PASS*5 ? PASS*5 : sb)
-  const ijCot  = ijBase * 0.005
+  const ijCot  = ijBase * (T.ij/100)
   const afTaux = getAFTaux(remun)
   const afCot  = sb * afTaux
   const retBase1 = sb < PASS*0.1135 ? PASS*0.1135 : (sb > PASS ? PASS : sb)
-  const retCot1  = retBase1 * 0.1787
+  const retCot1  = retBase1 * (T.ret1/100)
   const retBase2 = sb > retBase1 ? sb - retBase1 : 0
-  const retCot2  = retBase2 * 0.0072
+  const retCot2  = retBase2 * (T.ret2/100)
   const retcBase1 = sb > PASS ? PASS : sb
-  const retcCot1  = retcBase1 * 0.081
+  const retcCot1  = retcBase1 * (T.retc1/100)
   const retcBase2 = sb > PASS*4 ? PASS*3 : (sb > PASS ? sb - PASS : 0)
-  const retcCot2  = retcBase2 * 0.091
+  const retcCot2  = retcBase2 * (T.retc2/100)
   const invBase = sb < PASS*0.115 ? PASS*0.115 : (sb > PASS ? PASS : sb)
-  const invCot  = invBase * 0.013
-  const csgdCot  = sb * 0.068
-  const csgndCot = sb * 0.029
-  const cfpCot   = PASS * 0.0025
+  const invCot  = invBase * (T.inv/100)
+  const csgdCot  = sb * (T.csgd/100)
+  const csgndCot = sb * (T.csgnd/100)
+  const cfpCot   = PASS * (T.cfp/100)
 
   const cots = { mal1:malCot1, mal2:malCot2, ij:ijCot, af:afCot, ret1:retCot1, ret2:retCot2, retc1:retcCot1, retc2:retcCot2, inv:invCot, csgd:csgdCot, csgnd:csgndCot, cfp:cfpCot }
   const bases = { mal1:malBase1, mal2:malBase2, ij:ijBase, af:sb, ret1:retBase1, ret2:retBase2, retc1:retcBase1, retc2:retcBase2, inv:invBase, csgd:sb, csgnd:sb, cfp:PASS }
@@ -128,12 +128,12 @@ function computeOnce(remun, div, cotisB4) {
   return { sb, totalBase, totalAVerser, case1gb: remun + csgndCot, caseDsca: malCot1+malCot2+ijCot+afCot+retCot1+retCot2+retcCot1+retcCot2+invCot, cots, bases, taux }
 }
 
-function computeAll(remun, div, comptValues) {
+function computeAll(remun, div, comptValues, T) {
   const totalCompt = Object.values(comptValues).reduce((a, b) => a + b, 0)
   // Calcul itératif : B4 = D26 (cotisations à verser), convergence en ~20 itérations
-  let result = computeOnce(remun, div, totalCompt)
+  let result = computeOnce(remun, div, totalCompt, T)
   for (let i = 0; i < 100; i++) {
-    const next = computeOnce(remun, div, result.totalAVerser)
+    const next = computeOnce(remun, div, result.totalAVerser, T)
     if (Math.abs(next.totalAVerser - result.totalAVerser) < 0.01) { result = next; break }
     result = next
   }
@@ -203,8 +203,8 @@ function CotisTable({ rows, cots, bases, taux, compt, setCompt, totalAVerser, to
   )
 }
 
-function Tab1({ remun, div, setRemun, setDiv, compt, setCompt, regime }) {
-  const { sb, totalBase, totalCompt, totalAVerser, case1gb, caseDsca, cots, bases, taux } = computeAll(remun, div, compt)
+function Tab1({ remun, div, setRemun, setDiv, compt, setCompt, regime, tauxDB }) {
+  const { sb, totalBase, totalCompt, totalAVerser, case1gb, caseDsca, cots, bases, taux } = computeAll(remun, div, compt, tauxDB)
   const totalProv = totalAVerser - totalCompt
 
   return (
@@ -279,7 +279,7 @@ function Tab1({ remun, div, setRemun, setDiv, compt, setCompt, regime }) {
   )
 }
 
-function Tab2({ regime }) {
+function Tab2({ regime, tauxDB, setTauxDB }) {
   const [taux, setTaux] = useState(null)
   const [saving, setSaving] = useState({})
 
@@ -291,14 +291,27 @@ function Tab2({ regime }) {
     })
   }, [])
 
+  // Sync local taux avec tauxDB parent quand il change
+  useEffect(() => {
+    if (!taux) return
+    setTaux(prev => {
+      const updated = { ...prev }
+      Object.entries(tauxDB).forEach(([id, val]) => {
+        if (updated[id]) updated[id] = { ...updated[id], taux: val }
+      })
+      return updated
+    })
+  }, [tauxDB])
+
   const handleTauxChange = useCallback(async (id, val) => {
     const num = parseFloat(val)
     if (isNaN(num)) return
     setTaux(prev => ({ ...prev, [id]: { ...prev[id], taux: num } }))
+    setTauxDB(prev => ({ ...prev, [id]: num }))
     setSaving(prev => ({ ...prev, [id]: true }))
     await updateTaux(id, num)
     setSaving(prev => ({ ...prev, [id]: false }))
-  }, [])
+  }, [setTauxDB])
 
   if (!taux) return <div style={{padding:'2rem', color:'var(--text-secondary)'}}>Chargement des taux...</div>
 
@@ -451,6 +464,12 @@ function HomePage({ onStart }) {
   )
 }
 
+const DEFAULT_TAUX_DB = {
+  mal2: 6.50, ij: 0.50, af: 3.10,
+  ret1: 17.87, ret2: 0.72, retc1: 8.10, retc2: 9.10,
+  inv: 1.30, csgd: 6.80, csgnd: 2.90, cfp: 0.25
+}
+
 export default function App() {
   const [page, setPage] = useState('home')
   const [dossier, setDossier] = useState('')
@@ -459,6 +478,15 @@ export default function App() {
   const [remun, setRemun] = useState(30000)
   const [div, setDiv] = useState(0)
   const [compt, setCompt] = useState({ ...DEFAULT_COMPT })
+  const [tauxDB, setTauxDB] = useState({ ...DEFAULT_TAUX_DB })
+
+  useEffect(() => {
+    fetchTaux().then(rows => {
+      const map = {}
+      rows.forEach(r => { map[r.id] = r.taux })
+      setTauxDB(prev => ({ ...prev, ...map }))
+    })
+  }, [])
 
   if (page === 'home') {
     return <HomePage onStart={(d, r) => { setDossier(d); setRegime(r); setPage('app') }} />
@@ -486,13 +514,14 @@ export default function App() {
           </div>
           <div className={styles.tabContent}>
             {activeTab === 0
-              ? <Tab1 remun={remun} div={div} setRemun={setRemun} setDiv={setDiv} compt={compt} setCompt={setCompt} regime={regime} />
-              : <Tab2 regime={regime} />}
+              ? <Tab1 remun={remun} div={div} setRemun={setRemun} setDiv={setDiv} compt={compt} setCompt={setCompt} regime={regime} tauxDB={tauxDB} />
+              : <Tab2 regime={regime} tauxDB={tauxDB} setTauxDB={setTauxDB} />}
           </div>
         </div>
       </div>
     </div>
   )
 }
+
 
 
