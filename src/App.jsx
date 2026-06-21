@@ -10,7 +10,8 @@ async function fetchTaux() {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/taux_cotisations?select=*&order=id`, {
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
   })
-  return res.json()
+  const rows = await res.json()
+  return rows.map(r => ({ ...r, taux: parseFloat(r.taux) }))
 }
 
 async function updateTaux(id, taux) {
@@ -483,7 +484,7 @@ export default function App() {
   useEffect(() => {
     fetchTaux().then(rows => {
       const map = {}
-      rows.forEach(r => { map[r.id] = r.taux })
+      rows.forEach(r => { map[r.id] = parseFloat(r.taux) })
       setTauxDB(prev => ({ ...prev, ...map }))
     })
   }, [])
@@ -522,6 +523,7 @@ export default function App() {
     </div>
   )
 }
+
 
 
 
