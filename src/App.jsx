@@ -83,7 +83,7 @@ function getAFTaux(remun) {
   return 0.031
 }
 
-function computeOnce(remun, div, cotisB4, T) {
+function computeOnce(remun, div, cotisB4, T, isCavec) {
   const totalBase = remun + div + cotisB4
   let abt = totalBase * ABATTEMENT
   if (abt > PASS * PLAFOND_ABT) abt = PASS * PLAFOND_ABT
@@ -99,15 +99,26 @@ function computeOnce(remun, div, cotisB4, T) {
   const ijCot  = ijBase * (T.ij/100)
   const afTaux = getAFTaux(remun)
   const afCot  = sb * afTaux
-  const retBase1 = sb < PASS*0.1135 ? PASS*0.1135 : (sb > PASS ? PASS : sb)
+  // Bases retraite/invalidité : différentes selon RSI ou CAVEC
+  const retBase1 = isCavec
+    ? (T.retBase1_cavec !== undefined ? T.retBase1_cavec : (sb < PASS*0.1135 ? PASS*0.1135 : (sb > PASS ? PASS : sb)))
+    : (sb < PASS*0.1135 ? PASS*0.1135 : (sb > PASS ? PASS : sb))
   const retCot1  = retBase1 * (T.ret1/100)
-  const retBase2 = sb > retBase1 ? sb - retBase1 : 0
+  const retBase2 = isCavec
+    ? (T.retBase2_cavec !== undefined ? T.retBase2_cavec : (sb > retBase1 ? sb - retBase1 : 0))
+    : (sb > retBase1 ? sb - retBase1 : 0)
   const retCot2  = retBase2 * (T.ret2/100)
-  const retcBase1 = sb > PASS ? PASS : sb
+  const retcBase1 = isCavec
+    ? (T.retcBase1_cavec !== undefined ? T.retcBase1_cavec : (sb > PASS ? PASS : sb))
+    : (sb > PASS ? PASS : sb)
   const retcCot1  = retcBase1 * (T.retc1/100)
-  const retcBase2 = sb > PASS*4 ? PASS*3 : (sb > PASS ? sb - PASS : 0)
+  const retcBase2 = isCavec
+    ? (T.retcBase2_cavec !== undefined ? T.retcBase2_cavec : (sb > PASS*4 ? PASS*3 : (sb > PASS ? sb - PASS : 0)))
+    : (sb > PASS*4 ? PASS*3 : (sb > PASS ? sb - PASS : 0))
   const retcCot2  = retcBase2 * (T.retc2/100)
-  const invBase = sb < PASS*0.115 ? PASS*0.115 : (sb > PASS ? PASS : sb)
+  const invBase = isCavec
+    ? (T.invBase_cavec !== undefined ? T.invBase_cavec : (sb < PASS*0.115 ? PASS*0.115 : (sb > PASS ? PASS : sb)))
+    : (sb < PASS*0.115 ? PASS*0.115 : (sb > PASS ? PASS : sb))
   const invCot  = invBase * (T.inv/100)
   const csgdCot  = sb * (T.csgd/100)
   const csgndCot = sb * (T.csgnd/100)
@@ -120,11 +131,11 @@ function computeOnce(remun, div, cotisB4, T) {
   return { sb, totalBase, totalAVerser, case1gb: remun + csgndCot, caseDsca: malCot1+malCot2+ijCot+afCot+retCot1+retCot2+retcCot1+retcCot2+invCot, cots, bases, taux }
 }
 
-function computeAll(remun, div, comptValues, T) {
+function computeAll(remun, div, comptValues, T, isCavec) {
   const totalCompt = Object.values(comptValues).reduce((a, b) => a + b, 0)
-  let result = computeOnce(remun, div, totalCompt, T)
+  let result = computeOnce(remun, div, totalCompt, T, isCavec)
   for (let i = 0; i < 100; i++) {
-    const next = computeOnce(remun, div, result.totalAVerser, T)
+    const next = computeOnce(remun, div, result.totalAVerser, T, isCavec)
     if (Math.abs(next.totalAVerser - result.totalAVerser) < 0.01) { result = next; break }
     result = next
   }
@@ -189,9 +200,9 @@ function CotisTable({ rowLabels, cots, bases, taux, compt, setCompt, totalAVerse
 
 // ── Tab1 ──────────────────────────────────────────────────────────────────────
 function Tab1({ remun, div, setRemun, setDiv, compt, setCompt, regime, tauxDB }) {
-  const { sb, totalBase, totalCompt, totalAVerser, case1gb, caseDsca, cots, bases, taux } = computeAll(remun, div, compt, tauxDB)
-  const totalProv = totalAVerser - totalCompt
   const isCavec = regime === 'URSSAF CAVEC'
+  const { sb, totalBase, totalCompt, totalAVerser, case1gb, caseDsca, cots, bases, taux } = computeAll(remun, div, compt, tauxDB, isCavec)
+  const totalProv = totalAVerser - totalCompt
   const mainLabels = isCavec ? ROW_LABELS_RSI : ROW_LABELS_URSSAF
 
   return (
@@ -302,12 +313,57 @@ function Tab2({ regime, tauxDB, setTauxDB }) {
   const mainRows = isCavec ? allRows.filter(r => !CAVEC_IDS.includes(r.id)) : allRows
   const cavecRows = allRows.filter(r => CAVEC_IDS.includes(r.id))
 
-  const TauxRow = ({ row }) => {
+  const CAVEC_IDS_SET = new Set(['ret1','ret2','retc1','retc2','inv'])
+
+  const handleBaseCavecChange = (id, val) => {
+    setRows(prev => ({ ...prev, [id]: { ...prev[id], base_cavec: val } }))
+    setPending(prev => ({ ...prev, [`${id}_base_cavec`]: val }))
+  }
+
+  const handleValiderBaseCavec = async (id) => {
+    const val = pending[`${id}_base_cavec`]
+    if (val === undefined) return
+    setSaving(prev => ({ ...prev, [`${id}_bc`]: true }))
+    await fetch(`${SUPABASE_URL}/rest/v1/taux_cotisations?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ base_cavec: val })
+    })
+    setPending(prev => { const n = { ...prev }; delete n[`${id}_base_cavec`]; return n })
+    setSaving(prev => ({ ...prev, [`${id}_bc`]: false }))
+  }
+
+  const TauxRow = ({ row, showCavecBase }) => {
     const isDirty = pending[row.id] !== undefined
+    const isBaseDirty = pending[`${row.id}_base_cavec`] !== undefined
     return (
       <tr>
         <td>{row.label}</td>
-        <td>{row.base}</td>
+        <td>
+          <div style={{display:'flex', flexDirection:'column', gap:'4px'}}>
+            <span style={{fontSize:'12px', color:'var(--text-muted)'}}>RSI :</span>
+            <span>{row.base}</span>
+            {showCavecBase && (
+              <>
+                <span style={{fontSize:'12px', color:'var(--text-muted)', marginTop:'4px'}}>CAVEC :</span>
+                <div style={{display:'flex', alignItems:'center', gap:'4px'}}>
+                  <input
+                    style={{fontSize:'13px', padding:'3px 6px', border:'0.5px solid', borderColor: isBaseDirty ? 'var(--blue)' : 'var(--border)', borderRadius:'4px', background:'var(--bg-secondary)', color:'var(--text-primary)', width:'180px'}}
+                    type="text"
+                    value={row.base_cavec || row.base}
+                    onChange={e => handleBaseCavecChange(row.id, e.target.value)}
+                  />
+                  {isBaseDirty && (
+                    <button onClick={() => handleValiderBaseCavec(row.id)} disabled={saving[`${row.id}_bc`]}
+                      style={{fontSize:'11px', fontWeight:'500', padding:'3px 8px', background:'var(--blue)', color:'white', border:'none', borderRadius:'4px', cursor:'pointer'}}>
+                      {saving[`${row.id}_bc`] ? '...' : 'Valider'}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </td>
         <td className={styles.right}>
           <div style={{display:'flex', alignItems:'center', gap:'6px', justifyContent:'flex-end'}}>
             <input
@@ -337,7 +393,7 @@ function Tab2({ regime, tauxDB, setTauxDB }) {
         <thead><tr><th>Cotisation</th><th>Base de cotisation</th><th className={styles.right}>Taux</th></tr></thead>
         <tbody>
           {showMaladie && <tr><td>Maladie</td><td>En fonction du revenu (progressif)</td><td className={styles.right}>—</td></tr>}
-          {tableRows.map(row => <TauxRow key={row.id} row={row} />)}
+          {tableRows.map(row => <TauxRow key={row.id} row={row} showCavecBase={CAVEC_IDS_SET.has(row.id)} />)}
         </tbody>
       </table>
     </div>
@@ -479,3 +535,4 @@ export default function App() {
     </div>
   )
 }
+
