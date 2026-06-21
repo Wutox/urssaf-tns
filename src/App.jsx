@@ -100,16 +100,16 @@ function computeOnce(remun, div, cotisB4, T, isCavec) {
   const afTaux = getAFTaux(remun)
   const afCot  = sb * afTaux
   // Bases retraite/invalidité : différentes selon RSI ou CAVEC
-  // CAVEC : base = rémunération totale (sb), comme l'AF
-  const retBase1 = isCavec ? sb : (sb < PASS*0.1135 ? PASS*0.1135 : (sb > PASS ? PASS : sb))
+  // CAVEC Tranche 2 uniquement : base = sb (rémunération totale)
+  const retBase1 = sb < PASS*0.1135 ? PASS*0.1135 : (sb > PASS ? PASS : sb)
   const retCot1  = retBase1 * (T.ret1/100)
-  const retBase2 = isCavec ? 0 : (sb > retBase1 ? sb - retBase1 : 0)
+  const retBase2 = isCavec ? sb : (sb > retBase1 ? sb - retBase1 : 0)
   const retCot2  = retBase2 * (T.ret2/100)
-  const retcBase1 = isCavec ? sb : (sb > PASS ? PASS : sb)
+  const retcBase1 = sb > PASS ? PASS : sb
   const retcCot1  = retcBase1 * (T.retc1/100)
-  const retcBase2 = isCavec ? 0 : (sb > PASS*4 ? PASS*3 : (sb > PASS ? sb - PASS : 0))
+  const retcBase2 = sb > PASS*4 ? PASS*3 : (sb > PASS ? sb - PASS : 0)
   const retcCot2  = retcBase2 * (T.retc2/100)
-  const invBase = isCavec ? sb : (sb < PASS*0.115 ? PASS*0.115 : (sb > PASS ? PASS : sb))
+  const invBase = sb < PASS*0.115 ? PASS*0.115 : (sb > PASS ? PASS : sb)
   const invCot  = invBase * (T.inv/100)
   const csgdCot  = sb * (T.csgd/100)
   const csgndCot = sb * (T.csgnd/100)
@@ -538,6 +538,7 @@ export default function App() {
     </div>
   )
 }
+
 
 
 
