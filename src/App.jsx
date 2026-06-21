@@ -27,6 +27,30 @@ async function saveTaux(id, taux) {
   })
 }
 
+async function fetchBaremeInvalidite() {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/bareme_invalidite_cavec?select=*&order=seuil_min`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+  })
+  return res.json()
+}
+
+async function saveBaremeInvalidite(id, fields) {
+  await fetch(`${SUPABASE_URL}/rest/v1/bareme_invalidite_cavec?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ ...fields, updated_at: new Date().toISOString() })
+  })
+}
+
+function getInvaliditeCavec(revenuBrut, bareme) {
+  if (!bareme || bareme.length === 0) return 612
+  for (const tranche of [...bareme].sort((a, b) => a.seuil_min - b.seuil_min)) {
+    const max = tranche.seuil_max === null ? Infinity : parseFloat(tranche.seuil_max)
+    if (revenuBrut <= max) return parseFloat(tranche.montant)
+  }
+  return parseFloat(bareme[bareme.length - 1].montant)
+}
+
 // ── Constantes ────────────────────────────────────────────────────────────────
 const PASS = 47100
 const ABATTEMENT = 0.26
@@ -83,7 +107,7 @@ function getAFTaux(remun) {
   return 0.031
 }
 
-function computeOnce(remun, div, cotisB4, T, isCavec) {
+function computeOnce(remun, div, cotisB4, T, isCavec, bareme) {
   const totalBase = remun + div + cotisB4
   let abt = totalBase * ABATTEMENT
   if (abt > PASS * PLAFOND_ABT) abt = PASS * PLAFOND_ABT
@@ -110,7 +134,7 @@ function computeOnce(remun, div, cotisB4, T, isCavec) {
   const retcBase2 = sb > PASS*4 ? PASS*3 : (sb > PASS ? sb - PASS : 0)
   const retcCot2  = retcBase2 * (T.retc2/100)
   const invBase = sb < PASS*0.115 ? PASS*0.115 : (sb > PASS ? PASS : sb)
-  const invCot  = invBase * (T.inv/100)
+  const invCot  = isCavec ? getInvaliditeCavec(sb, bareme) : invBase * (T.inv/100)
   const csgdCot  = sb * (T.csgd/100)
   const csgndCot = sb * (T.csgnd/100)
   const cfpCot   = PASS * (T.cfp/100)
@@ -122,11 +146,11 @@ function computeOnce(remun, div, cotisB4, T, isCavec) {
   return { sb, totalBase, totalAVerser, case1gb: remun + csgndCot, caseDsca: malCot1+malCot2+ijCot+afCot+retCot1+retCot2+retcCot1+retcCot2+invCot, cots, bases, taux }
 }
 
-function computeAll(remun, div, comptValues, T, isCavec) {
+function computeAll(remun, div, comptValues, T, isCavec, bareme) {
   const totalCompt = Object.values(comptValues).reduce((a, b) => a + b, 0)
-  let result = computeOnce(remun, div, totalCompt, T, isCavec)
+  let result = computeOnce(remun, div, totalCompt, T, isCavec, bareme)
   for (let i = 0; i < 100; i++) {
-    const next = computeOnce(remun, div, result.totalAVerser, T, isCavec)
+    const next = computeOnce(remun, div, result.totalAVerser, T, isCavec, bareme)
     if (Math.abs(next.totalAVerser - result.totalAVerser) < 0.01) { result = next; break }
     result = next
   }
@@ -189,10 +213,59 @@ function CotisTable({ rowLabels, cots, bases, taux, compt, setCompt, totalAVerse
   )
 }
 
+// ── BaremeCavecRow ────────────────────────────────────────────────────────────
+function BaremeCavecRow({ tranche, onSave }) {
+  const [local, setLocal] = useState({ ...tranche })
+  const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const handleChange = (field, val) => {
+    setLocal(prev => ({ ...prev, [field]: val }))
+    setDirty(true)
+  }
+
+  const handleValider = async () => {
+    setSaving(true)
+    await onSave(local.id, {
+      seuil_min: parseFloat(local.seuil_min),
+      seuil_max: local.seuil_max === null || local.seuil_max === '' ? null : parseFloat(local.seuil_max),
+      montant: parseFloat(local.montant)
+    })
+    setDirty(false)
+    setSaving(false)
+  }
+
+  const inputStyle = (isDirty) => ({
+    fontSize:'13px', padding:'3px 6px', border:'0.5px solid',
+    borderColor: isDirty ? 'var(--blue)' : 'var(--border)',
+    borderRadius:'4px', background:'var(--bg-secondary)',
+    color:'var(--text-primary)', width:'100px', textAlign:'right'
+  })
+
+  return (
+    <tr>
+      <td><input style={inputStyle(dirty)} type="number" value={local.seuil_min} onChange={e => handleChange('seuil_min', e.target.value)} /></td>
+      <td><input style={inputStyle(dirty)} type="number" value={local.seuil_max ?? ''} placeholder="∞" onChange={e => handleChange('seuil_max', e.target.value)} /></td>
+      <td className={styles.right}>
+        <div style={{display:'flex', alignItems:'center', gap:'6px', justifyContent:'flex-end'}}>
+          <input style={{...inputStyle(dirty), width:'80px'}} type="number" value={local.montant} onChange={e => handleChange('montant', e.target.value)} />
+          <span style={{fontSize:'12px', color:'var(--text-muted)'}}>€</span>
+          {dirty && (
+            <button onClick={handleValider} disabled={saving}
+              style={{fontSize:'11px', fontWeight:'500', padding:'3px 8px', background:'var(--blue)', color:'white', border:'none', borderRadius:'4px', cursor:'pointer'}}>
+              {saving ? '...' : 'Valider'}
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  )
+}
+
 // ── Tab1 ──────────────────────────────────────────────────────────────────────
-function Tab1({ remun, div, setRemun, setDiv, compt, setCompt, regime, tauxDB }) {
+function Tab1({ remun, div, setRemun, setDiv, compt, setCompt, regime, tauxDB, bareme }) {
   const isCavec = regime === 'URSSAF CAVEC'
-  const { sb, totalBase, totalCompt, totalAVerser, case1gb, caseDsca, cots, bases, taux } = computeAll(remun, div, compt, tauxDB, isCavec)
+  const { sb, totalBase, totalCompt, totalAVerser, case1gb, caseDsca, cots, bases, taux } = computeAll(remun, div, compt, tauxDB, isCavec, bareme)
   const totalProv = totalAVerser - totalCompt
   const mainLabels = isCavec ? ROW_LABELS_RSI : ROW_LABELS_URSSAF
 
@@ -263,7 +336,7 @@ function Tab1({ remun, div, setRemun, setDiv, compt, setCompt, regime, tauxDB })
 }
 
 // ── Tab2 ──────────────────────────────────────────────────────────────────────
-function Tab2({ regime, tauxDB, setTauxDB }) {
+function Tab2({ regime, tauxDB, setTauxDB, bareme, setBareme }) {
   const [rows, setRows] = useState(null)
   const [pending, setPending] = useState({})
   const [saving, setSaving] = useState({})
@@ -428,6 +501,26 @@ function Tab2({ regime, tauxDB, setTauxDB }) {
           <RefTable tableRows={cavecRows} showMaladie={false} />
         </div>
       )}
+      {regime === 'URSSAF CAVEC' && (
+        <div className={styles.refSection}>
+          <div className={styles.sectionTitle}>Barème invalidité CAVEC</div>
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead><tr><th>Revenu brut min</th><th>Revenu brut max</th><th className={styles.right}>Montant forfaitaire</th></tr></thead>
+              <tbody>
+                {bareme.map(t => (
+                  <BaremeCavecRow key={t.id} tranche={t} onSave={async (id, fields) => {
+                    await saveBaremeInvalidite(id, fields)
+                    const updated = await fetchBaremeInvalidite()
+                    setBareme(updated)
+                  }} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className={styles.refSection}>
         <div className={styles.sectionTitle}>Barème progressif maladie</div>
         <div className={styles.tableWrap}>
@@ -501,6 +594,11 @@ export default function App() {
   const [div, setDiv] = useState(0)
   const [compt, setCompt] = useState({ ...DEFAULT_COMPT })
   const [tauxDB, setTauxDB] = useState({ ...DEFAULT_TAUX_DB })
+  const [bareme, setBareme] = useState([])
+
+  useEffect(() => {
+    fetchBaremeInvalidite().then(data => setBareme(data))
+  }, [])
 
   if (page === 'home') {
     return <HomePage onStart={(d, r) => { setDossier(d); setRegime(r); setPage('app') }} />
@@ -530,14 +628,15 @@ export default function App() {
           <div className={styles.tabContent}>
             {activeTab === 0
               ? <Tab1 remun={remun} div={div} setRemun={setRemun} setDiv={setDiv}
-                  compt={compt} setCompt={setCompt} regime={regime} tauxDB={tauxDB} />
-              : <Tab2 regime={regime} tauxDB={tauxDB} setTauxDB={setTauxDB} />}
+                  compt={compt} setCompt={setCompt} regime={regime} tauxDB={tauxDB} bareme={bareme} />
+              : <Tab2 regime={regime} tauxDB={tauxDB} setTauxDB={setTauxDB} bareme={bareme} setBareme={setBareme} />}
           </div>
         </div>
       </div>
     </div>
   )
 }
+
 
 
 
