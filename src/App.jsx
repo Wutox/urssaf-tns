@@ -259,17 +259,85 @@ function Tab2() {
   )
 }
 
+function HomePage({ onStart }) {
+  const [dossier, setDossier] = useState('')
+  const [regime, setRegime] = useState('URSSAF RSI')
+
+  return (
+    <div className={styles.page}>
+      <div className={styles.homeWrap}>
+        <div className={styles.homeCard}>
+          <div className={styles.homeLogo}>
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="40" height="40" rx="10" fill="#185FA5"/>
+              <path d="M20 10L10 17v13h7v-7h6v7h7V17L20 10Z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
+              <path d="M17 23h6v7h-6z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <h1 className={styles.homeTitle}>Régularisation URSSAF 2025</h1>
+          <p className={styles.homeSubtitle}>Renseignez les informations du dossier pour commencer</p>
+          <div className={styles.homeForm}>
+            <div className={styles.homeField}>
+              <label className={styles.homeLabel}>Nom du dossier / Personne</label>
+              <input
+                className={styles.homeInput}
+                type="text"
+                placeholder="Ex : Martin Dupont"
+                value={dossier}
+                onChange={e => setDossier(e.target.value)}
+              />
+            </div>
+            <div className={styles.homeField}>
+              <label className={styles.homeLabel}>Régime social</label>
+              <select
+                className={styles.homeSelect}
+                value={regime}
+                onChange={e => setRegime(e.target.value)}
+              >
+                <option value="URSSAF RSI">URSSAF RSI</option>
+                <option value="URSSAF CAVEC">URSSAF CAVEC</option>
+              </select>
+            </div>
+            <button
+              className={styles.homeBtn}
+              disabled={!dossier.trim()}
+              onClick={() => onStart(dossier.trim(), regime)}
+            >
+              Accéder au calculateur →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
+  const [page, setPage] = useState('home')
+  const [dossier, setDossier] = useState('')
+  const [regime, setRegime] = useState('')
   const [activeTab, setActiveTab] = useState(0)
   const [remun, setRemun] = useState(30000)
   const [div, setDiv] = useState(0)
   const [compt, setCompt] = useState({ ...DEFAULT_COMPT })
 
+  if (page === 'home') {
+    return <HomePage onStart={(d, r) => { setDossier(d); setRegime(r); setPage('app') }} />
+  }
+
   return (
     <div className={styles.page}>
       <div className={styles.container}>
         <div className={styles.header}>
-          <h1 className={styles.title}>Régularisation URSSAF TNS 2025</h1>
+          <div>
+            <h1 className={styles.title}>Régularisation URSSAF 2025</h1>
+            <div className={styles.headerMeta}>
+              <span className={styles.metaItem}>{dossier}</span>
+              <span className={styles.metaDot}>·</span>
+              <span className={styles.metaItem}>{regime}</span>
+            </div>
+          </div>
+          <button className={styles.backBtn} onClick={() => setPage('home')}>← Retour</button>
         </div>
         <div className={styles.card}>
           <div className={styles.tabs}>
@@ -287,7 +355,3 @@ export default function App() {
     </div>
   )
 }
-
-
-
-
