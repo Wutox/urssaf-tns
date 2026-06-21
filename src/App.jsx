@@ -103,7 +103,7 @@ function computeOnce(remun, div, cotisB4, T, isCavec) {
   // CAVEC Tranche 2 uniquement : base = sb (rémunération totale)
   const retBase1 = sb < PASS*0.1135 ? PASS*0.1135 : (sb > PASS ? PASS : sb)
   const retCot1  = retBase1 * (T.ret1/100)
-  const retBase2 = isCavec ? sb : (sb > retBase1 ? sb - retBase1 : 0)
+  const retBase2 = isCavec ? Math.min(sb, PASS*5) : (sb > retBase1 ? sb - retBase1 : 0)
   const retCot2  = retBase2 * (T.ret2/100)
   const retcBase1 = sb > PASS ? PASS : sb
   const retcCot1  = retcBase1 * (T.retc1/100)
@@ -538,6 +538,7 @@ export default function App() {
     </div>
   )
 }
+
 
 
 
