@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import './index.css'
 import styles from './App.module.css'
 
-
+// ── Supabase ──────────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://hydzvtcfgryrxfwfnnca.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5ZHp2dGNmZ3J5cnhmd2ZubmNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMjU2NTAsImV4cCI6MjA5NzYwMTY1MH0.xzhwOqlozQNy61zEEQ9wenpld4fbyBkDOijIfGrL6N4'
 
@@ -14,7 +14,7 @@ async function fetchTaux() {
   return rows.map(r => ({ ...r, taux: parseFloat(r.taux) }))
 }
 
-async function updateTaux(id, taux) {
+async function saveTaux(id, taux) {
   await fetch(`${SUPABASE_URL}/rest/v1/taux_cotisations?id=eq.${id}`, {
     method: 'PATCH',
     headers: {
@@ -27,6 +27,7 @@ async function updateTaux(id, taux) {
   })
 }
 
+// ── Constantes ────────────────────────────────────────────────────────────────
 const PASS = 47100
 const ABATTEMENT = 0.26
 const PLAFOND_ABT = 1.3
@@ -38,42 +39,32 @@ const DEFAULT_COMPT = {
   inv: 612, csgd: 4851, csgnd: 2069, cfp: 118,
 }
 
+const DEFAULT_TAUX_DB = {
+  mal2: 6.50, ij: 0.50, af: 3.10,
+  ret1: 17.87, ret2: 0.72, retc1: 8.10, retc2: 9.10,
+  inv: 1.30, csgd: 6.80, csgnd: 2.90, cfp: 0.25
+}
+
 const ROW_LABELS_URSSAF = {
-  mal1:  'Maladie (≤ 235 500 €)',
-  mal2:  'Maladie (> 235 500 €)',
-  ij:    'IJ',
-  af:    'AF',
-  ret1:  'Retraite base (≤ PASS)',
-  ret2:  'Retraite base (> PASS)',
-  retc1: 'Retraite compl. (≤ PASS)',
-  retc2: 'Retraite compl. (1–4 PASS)',
-  inv:   'Invalidité',
-  csgd:  'CSG déductible',
-  csgnd: 'CSG non déductible',
-  cfp:   'CFP',
+  mal1: 'Maladie (≤ 235 500 €)', mal2: 'Maladie (> 235 500 €)',
+  ij: 'IJ', af: 'AF',
+  ret1: 'Retraite base (≤ PASS)', ret2: 'Retraite base (> PASS)',
+  retc1: 'Retraite compl. (≤ PASS)', retc2: 'Retraite compl. (1–4 PASS)',
+  inv: 'Invalidité', csgd: 'CSG déductible', csgnd: 'CSG non déductible', cfp: 'CFP',
 }
-
 const ROW_LABELS_RSI = {
-  mal1:  'Maladie (≤ 235 500 €)',
-  mal2:  'Maladie (> 235 500 €)',
-  ij:    'IJ',
-  af:    'AF',
-  csgd:  'CSG déductible',
-  csgnd: 'CSG non déductible',
-  cfp:   'CFP',
+  mal1: 'Maladie (≤ 235 500 €)', mal2: 'Maladie (> 235 500 €)',
+  ij: 'IJ', af: 'AF',
+  csgd: 'CSG déductible', csgnd: 'CSG non déductible', cfp: 'CFP',
 }
-
 const ROW_LABELS_CAVEC = {
-  ret1:  'Retraite base (≤ PASS)',
-  ret2:  'Retraite base (> PASS)',
-  retc1: 'Retraite compl. (≤ PASS)',
-  retc2: 'Retraite compl. (1–4 PASS)',
-  inv:   'Invalidité',
+  ret1: 'Retraite base (≤ PASS)', ret2: 'Retraite base (> PASS)',
+  retc1: 'Retraite compl. (≤ PASS)', retc2: 'Retraite compl. (1–4 PASS)',
+  inv: 'Invalidité',
 }
 
-function fmt(n) {
-  return Math.round(n).toLocaleString('fr-FR') + ' €'
-}
+// ── Calculs ───────────────────────────────────────────────────────────────────
+function fmt(n) { return Math.round(n).toLocaleString('fr-FR') + ' €' }
 
 function getMaladieTaux(sb) {
   const p = PASS
@@ -124,14 +115,13 @@ function computeOnce(remun, div, cotisB4, T) {
 
   const cots = { mal1:malCot1, mal2:malCot2, ij:ijCot, af:afCot, ret1:retCot1, ret2:retCot2, retc1:retcCot1, retc2:retcCot2, inv:invCot, csgd:csgdCot, csgnd:csgndCot, cfp:cfpCot }
   const bases = { mal1:malBase1, mal2:malBase2, ij:ijBase, af:sb, ret1:retBase1, ret2:retBase2, retc1:retcBase1, retc2:retcBase2, inv:invBase, csgd:sb, csgnd:sb, cfp:PASS }
-  const taux = { mal1:malTaux1, mal2:0.065, ij:0.005, af:afTaux, ret1:0.1787, ret2:0.0072, retc1:0.081, retc2:0.091, inv:0.013, csgd:0.068, csgnd:0.029, cfp:0.0025 }
+  const taux = { mal1:malTaux1, mal2:T.mal2/100, ij:T.ij/100, af:afTaux, ret1:T.ret1/100, ret2:T.ret2/100, retc1:T.retc1/100, retc2:T.retc2/100, inv:T.inv/100, csgd:T.csgd/100, csgnd:T.csgnd/100, cfp:T.cfp/100 }
   const totalAVerser = Object.values(cots).reduce((a, b) => a + b, 0)
   return { sb, totalBase, totalAVerser, case1gb: remun + csgndCot, caseDsca: malCot1+malCot2+ijCot+afCot+retCot1+retCot2+retcCot1+retcCot2+invCot, cots, bases, taux }
 }
 
 function computeAll(remun, div, comptValues, T) {
   const totalCompt = Object.values(comptValues).reduce((a, b) => a + b, 0)
-  // Calcul itératif : B4 = D26 (cotisations à verser), convergence en ~20 itérations
   let result = computeOnce(remun, div, totalCompt, T)
   for (let i = 0; i < 100; i++) {
     const next = computeOnce(remun, div, result.totalAVerser, T)
@@ -141,8 +131,9 @@ function computeAll(remun, div, comptValues, T) {
   return { ...result, totalCompt, totalBase: remun + div + result.totalAVerser }
 }
 
-function CotisTable({ rows, cots, bases, taux, compt, setCompt, totalAVerser, totalCompt, totalProv, showTotal, styles }) {
-  const ids = Object.keys(rows)
+// ── CotisTable ────────────────────────────────────────────────────────────────
+function CotisTable({ rowLabels, cots, bases, taux, compt, setCompt, totalAVerser, totalCompt, totalProv, showTotal }) {
+  const ids = Object.keys(rowLabels)
   const subtotalAVerser = ids.reduce((s, id) => s + cots[id], 0)
   const subtotalCompt = ids.reduce((s, id) => s + compt[id], 0)
   const subtotalProv = subtotalAVerser - subtotalCompt
@@ -164,7 +155,7 @@ function CotisTable({ rows, cots, bases, taux, compt, setCompt, totalAVerser, to
             const prov = cots[id] - compt[id]
             return (
               <tr key={id}>
-                <td>{rows[id]}</td>
+                <td>{rowLabels[id]}</td>
                 <td className={styles.right}>{Math.round(bases[id]).toLocaleString('fr-FR')} €</td>
                 <td className={styles.right}>{(taux[id]*100).toFixed(2)}%</td>
                 <td className={styles.right}>{Math.round(cots[id]).toLocaleString('fr-FR')} €</td>
@@ -182,31 +173,26 @@ function CotisTable({ rows, cots, bases, taux, compt, setCompt, totalAVerser, to
               </tr>
             )
           })}
-          {showTotal && (
-            <tr className={styles.totalRow}>
-              <td colSpan={3}>Total</td>
-              <td className={styles.right}>{Math.round(totalAVerser).toLocaleString('fr-FR')} €</td>
-              <td className={styles.right}>{Math.round(totalCompt).toLocaleString('fr-FR')} €</td>
-              <td className={totalProv < 0 ? styles.red : styles.green}>{Math.round(totalProv).toLocaleString('fr-FR')} €</td>
-            </tr>
-          )}
-          {!showTotal && (
-            <tr className={styles.totalRow}>
-              <td colSpan={3}>Sous-total</td>
-              <td className={styles.right}>{Math.round(subtotalAVerser).toLocaleString('fr-FR')} €</td>
-              <td className={styles.right}>{Math.round(subtotalCompt).toLocaleString('fr-FR')} €</td>
-              <td className={subtotalProv < 0 ? styles.red : styles.green}>{Math.round(subtotalProv).toLocaleString('fr-FR')} €</td>
-            </tr>
-          )}
+          <tr className={styles.totalRow}>
+            <td colSpan={3}>{showTotal ? 'Total' : 'Sous-total'}</td>
+            <td className={styles.right}>{Math.round(showTotal ? totalAVerser : subtotalAVerser).toLocaleString('fr-FR')} €</td>
+            <td className={styles.right}>{Math.round(showTotal ? totalCompt : subtotalCompt).toLocaleString('fr-FR')} €</td>
+            <td className={(showTotal ? totalProv : subtotalProv) < 0 ? styles.red : styles.green}>
+              {Math.round(showTotal ? totalProv : subtotalProv).toLocaleString('fr-FR')} €
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>
   )
 }
 
+// ── Tab1 ──────────────────────────────────────────────────────────────────────
 function Tab1({ remun, div, setRemun, setDiv, compt, setCompt, regime, tauxDB }) {
   const { sb, totalBase, totalCompt, totalAVerser, case1gb, caseDsca, cots, bases, taux } = computeAll(remun, div, compt, tauxDB)
   const totalProv = totalAVerser - totalCompt
+  const isCavec = regime === 'URSSAF CAVEC'
+  const mainLabels = isCavec ? ROW_LABELS_RSI : ROW_LABELS_URSSAF
 
   return (
     <div>
@@ -247,28 +233,22 @@ function Tab1({ remun, div, setRemun, setDiv, compt, setCompt, regime, tauxDB })
       </div>
 
       <div className={styles.sectionTitle}>Détail des cotisations</div>
-      <CotisTable
-        rows={regime === 'URSSAF CAVEC' ? ROW_LABELS_RSI : ROW_LABELS_URSSAF}
-        cots={cots} bases={bases} taux={taux} compt={compt} setCompt={setCompt}
+      <CotisTable rowLabels={mainLabels} cots={cots} bases={bases} taux={taux}
+        compt={compt} setCompt={setCompt}
         totalAVerser={totalAVerser} totalCompt={totalCompt} totalProv={totalProv}
-        showTotal={regime !== 'URSSAF CAVEC'}
-        styles={styles}
-      />
-      {regime === 'URSSAF CAVEC' && (
+        showTotal={!isCavec} />
+
+      {isCavec && (
         <>
-          <div className={styles.sectionTitle} style={{marginTop: '1.5rem'}}>Cotisations CAVEC</div>
-          <CotisTable
-            rows={ROW_LABELS_CAVEC}
-            cots={cots} bases={bases} taux={taux} compt={compt} setCompt={setCompt}
+          <div className={styles.sectionTitle} style={{marginTop:'1.5rem'}}>Cotisations CAVEC</div>
+          <CotisTable rowLabels={ROW_LABELS_CAVEC} cots={cots} bases={bases} taux={taux}
+            compt={compt} setCompt={setCompt}
             totalAVerser={totalAVerser} totalCompt={totalCompt} totalProv={totalProv}
-            showTotal={true}
-            styles={styles}
-          />
+            showTotal={true} />
         </>
       )}
 
       <div className={styles.divider} />
-
       <div className={styles.sectionTitle}>Données déclaratives</div>
       <div className={styles.caseGrid}>
         <div className={styles.caseItem}><div className={styles.caseLabel}>RAPPEL PASS</div><div className={styles.caseValue}>{fmt(PASS)}</div></div>
@@ -280,19 +260,19 @@ function Tab1({ remun, div, setRemun, setDiv, compt, setCompt, regime, tauxDB })
   )
 }
 
+// ── Tab2 ──────────────────────────────────────────────────────────────────────
 function Tab2({ regime, tauxDB, setTauxDB }) {
-  const [localTaux, setLocalTaux] = useState(null)
-  const [pending, setPending] = useState({})   // valeurs modifiées pas encore sauvées
-  const [saving, setSaving] = useState(false)
+  const [rows, setRows] = useState(null)
+  const [pending, setPending] = useState({})
+  const [saving, setSaving] = useState({})
 
   useEffect(() => {
-    fetchTaux().then(rows => {
+    fetchTaux().then(data => {
       const map = {}
-      rows.forEach(r => { map[r.id] = { ...r, taux: parseFloat(r.taux) } })
-      setLocalTaux(map)
-      // Mettre à jour tauxDB parent avec les vrais taux de la base
+      data.forEach(r => { map[r.id] = r })
+      setRows(map)
       const t = {}
-      rows.forEach(r => { t[r.id] = parseFloat(r.taux) })
+      data.forEach(r => { t[r.id] = r.taux })
       setTauxDB(prev => ({ ...prev, ...t }))
     })
   }, [])
@@ -300,26 +280,27 @@ function Tab2({ regime, tauxDB, setTauxDB }) {
   const handleChange = (id, val) => {
     const num = parseFloat(val)
     if (isNaN(num)) return
-    setLocalTaux(prev => ({ ...prev, [id]: { ...prev[id], taux: num } }))
+    setRows(prev => ({ ...prev, [id]: { ...prev[id], taux: num } }))
     setPending(prev => ({ ...prev, [id]: num }))
   }
 
   const handleValider = async (id) => {
     const num = pending[id]
     if (num === undefined) return
-    setSaving(true)
-    await updateTaux(id, num)
+    setSaving(prev => ({ ...prev, [id]: true }))
+    await saveTaux(id, num)
     setTauxDB(prev => ({ ...prev, [id]: num }))
     setPending(prev => { const n = { ...prev }; delete n[id]; return n })
-    setSaving(false)
+    setSaving(prev => ({ ...prev, [id]: false }))
   }
 
-  if (!localTaux) return <div style={{padding:'2rem', color:'var(--text-secondary)'}}>Chargement des taux...</div>
+  if (!rows) return <div style={{padding:'2rem', color:'var(--text-secondary)'}}>Chargement des taux...</div>
 
-  const allRows = Object.values(localTaux).filter(r => r.id !== 'mal1')
-  const rsiRows = allRows.filter(r => !['ret1','ret2','retc1','retc2','inv'].includes(r.id))
-  const cavecRows = allRows.filter(r => ['ret1','ret2','retc1','retc2','inv'].includes(r.id))
-  const displayRows = regime === 'URSSAF CAVEC' ? rsiRows : allRows
+  const isCavec = regime === 'URSSAF CAVEC'
+  const CAVEC_IDS = ['ret1','ret2','retc1','retc2','inv']
+  const allRows = Object.values(rows).filter(r => r.id !== 'mal1')
+  const mainRows = isCavec ? allRows.filter(r => !CAVEC_IDS.includes(r.id)) : allRows
+  const cavecRows = allRows.filter(r => CAVEC_IDS.includes(r.id))
 
   const TauxRow = ({ row }) => {
     const isDirty = pending[row.id] !== undefined
@@ -331,24 +312,17 @@ function Tab2({ regime, tauxDB, setTauxDB }) {
           <div style={{display:'flex', alignItems:'center', gap:'6px', justifyContent:'flex-end'}}>
             <input
               className={styles.comptInput}
-              type="number"
-              step="0.01"
+              type="number" step="0.01"
               value={row.taux}
               onChange={e => handleChange(row.id, e.target.value)}
               style={{width:'80px', borderColor: isDirty ? 'var(--blue)' : undefined}}
             />
-            <span style={{fontSize:'12px', color:'var(--text-muted)', minWidth:'14px'}}>%</span>
+            <span style={{fontSize:'12px', color:'var(--text-muted)', minWidth:'10px'}}>%</span>
             {isDirty && (
-              <button
-                onClick={() => handleValider(row.id)}
-                disabled={saving}
-                style={{
-                  fontSize:'11px', fontWeight:'500', padding:'3px 8px',
-                  background:'var(--blue)', color:'white', border:'none',
-                  borderRadius:'4px', cursor:'pointer', whiteSpace:'nowrap'
-                }}
-              >
-                {saving ? '...' : 'Valider'}
+              <button onClick={() => handleValider(row.id)} disabled={saving[row.id]}
+                style={{fontSize:'11px', fontWeight:'500', padding:'3px 8px', background:'var(--blue)',
+                  color:'white', border:'none', borderRadius:'4px', cursor:'pointer', whiteSpace:'nowrap'}}>
+                {saving[row.id] ? '...' : 'Valider'}
               </button>
             )}
           </div>
@@ -357,13 +331,13 @@ function Tab2({ regime, tauxDB, setTauxDB }) {
     )
   }
 
-  const RefTable = ({ rows }) => (
+  const RefTable = ({ tableRows, showMaladie }) => (
     <div className={styles.tableWrap}>
       <table className={styles.table}>
         <thead><tr><th>Cotisation</th><th>Base de cotisation</th><th className={styles.right}>Taux</th></tr></thead>
         <tbody>
-          <tr><td>Maladie</td><td>En fonction du revenu (progressif)</td><td className={styles.right}>—</td></tr>
-          {rows.map(row => <TauxRow key={row.id} row={row} />)}
+          {showMaladie && <tr><td>Maladie</td><td>En fonction du revenu (progressif)</td><td className={styles.right}>—</td></tr>}
+          {tableRows.map(row => <TauxRow key={row.id} row={row} />)}
         </tbody>
       </table>
     </div>
@@ -387,12 +361,12 @@ function Tab2({ regime, tauxDB, setTauxDB }) {
       </div>
       <div className={styles.refSection}>
         <div className={styles.sectionTitle}>Taux de cotisation par type</div>
-        <RefTable rows={displayRows} />
+        <RefTable tableRows={mainRows} showMaladie={true} />
       </div>
-      {regime === 'URSSAF CAVEC' && (
+      {isCavec && (
         <div className={styles.refSection}>
           <div className={styles.sectionTitle}>Cotisations CAVEC</div>
-          <RefTable rows={cavecRows} />
+          <RefTable tableRows={cavecRows} showMaladie={false} />
         </div>
       )}
       <div className={styles.refSection}>
@@ -416,7 +390,49 @@ function Tab2({ regime, tauxDB, setTauxDB }) {
   )
 }
 
+// ── HomePage ──────────────────────────────────────────────────────────────────
+function HomePage({ onStart }) {
+  const [dossier, setDossier] = useState('')
+  const [regime, setRegime] = useState('URSSAF RSI')
 
+  return (
+    <div className={styles.page}>
+      <div className={styles.homeWrap}>
+        <div className={styles.homeCard}>
+          <div className={styles.homeLogo}>
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="40" height="40" rx="10" fill="#185FA5"/>
+              <path d="M20 10L10 17v13h7v-7h6v7h7V17L20 10Z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
+              <path d="M17 23h6v7h-6z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <h1 className={styles.homeTitle}>Régularisation URSSAF 2025</h1>
+          <p className={styles.homeSubtitle}>Renseignez les informations du dossier pour commencer</p>
+          <div className={styles.homeForm}>
+            <div className={styles.homeField}>
+              <label className={styles.homeLabel}>Nom du dossier / Personne</label>
+              <input className={styles.homeInput} type="text" placeholder="Ex : Martin Dupont"
+                value={dossier} onChange={e => setDossier(e.target.value)} />
+            </div>
+            <div className={styles.homeField}>
+              <label className={styles.homeLabel}>Régime social</label>
+              <select className={styles.homeSelect} value={regime} onChange={e => setRegime(e.target.value)}>
+                <option value="URSSAF RSI">URSSAF RSI</option>
+                <option value="URSSAF CAVEC">URSSAF CAVEC</option>
+              </select>
+            </div>
+            <button className={styles.homeBtn} disabled={!dossier.trim()}
+              onClick={() => onStart(dossier.trim(), regime)}>
+              Accéder au calculateur →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const [page, setPage] = useState('home')
   const [dossier, setDossier] = useState('')
@@ -426,14 +442,6 @@ export default function App() {
   const [div, setDiv] = useState(0)
   const [compt, setCompt] = useState({ ...DEFAULT_COMPT })
   const [tauxDB, setTauxDB] = useState({ ...DEFAULT_TAUX_DB })
-
-  useEffect(() => {
-    fetchTaux().then(rows => {
-      const map = {}
-      rows.forEach(r => { map[r.id] = parseFloat(r.taux) })
-      setTauxDB(prev => ({ ...prev, ...map }))
-    })
-  }, [])
 
   if (page === 'home') {
     return <HomePage onStart={(d, r) => { setDossier(d); setRegime(r); setPage('app') }} />
@@ -456,12 +464,14 @@ export default function App() {
         <div className={styles.card}>
           <div className={styles.tabs}>
             {['Cotisations TNS — Rémunération RSI', 'Rappel bases de cotisation'].map((t, i) => (
-              <button key={i} className={`${styles.tab} ${activeTab === i ? styles.tabActive : ''}`} onClick={() => setActiveTab(i)}>{t}</button>
+              <button key={i} className={`${styles.tab} ${activeTab === i ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab(i)}>{t}</button>
             ))}
           </div>
           <div className={styles.tabContent}>
             {activeTab === 0
-              ? <Tab1 remun={remun} div={div} setRemun={setRemun} setDiv={setDiv} compt={compt} setCompt={setCompt} regime={regime} tauxDB={tauxDB} />
+              ? <Tab1 remun={remun} div={div} setRemun={setRemun} setDiv={setDiv}
+                  compt={compt} setCompt={setCompt} regime={regime} tauxDB={tauxDB} />
               : <Tab2 regime={regime} tauxDB={tauxDB} setTauxDB={setTauxDB} />}
           </div>
         </div>
@@ -469,8 +479,3 @@ export default function App() {
     </div>
   )
 }
-
-
-
-
-
