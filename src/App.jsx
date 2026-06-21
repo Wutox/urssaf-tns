@@ -281,59 +281,91 @@ function Tab1({ remun, div, setRemun, setDiv, compt, setCompt, regime, tauxDB })
 }
 
 function Tab2({ regime, tauxDB, setTauxDB }) {
-  const [taux, setTaux] = useState(null)
-  const [saving, setSaving] = useState({})
+  const [localTaux, setLocalTaux] = useState(null)
+  const [pending, setPending] = useState({})   // valeurs modifiées pas encore sauvées
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     fetchTaux().then(rows => {
       const map = {}
-      rows.forEach(r => { map[r.id] = r })
-      setTaux(map)
+      rows.forEach(r => { map[r.id] = { ...r, taux: parseFloat(r.taux) } })
+      setLocalTaux(map)
+      // Mettre à jour tauxDB parent avec les vrais taux de la base
+      const t = {}
+      rows.forEach(r => { t[r.id] = parseFloat(r.taux) })
+      setTauxDB(prev => ({ ...prev, ...t }))
     })
   }, [])
 
-  // Sync local taux avec tauxDB parent quand il change
-  useEffect(() => {
-    if (!taux) return
-    setTaux(prev => {
-      const updated = { ...prev }
-      Object.entries(tauxDB).forEach(([id, val]) => {
-        if (updated[id]) updated[id] = { ...updated[id], taux: val }
-      })
-      return updated
-    })
-  }, [tauxDB])
-
-  const handleTauxChange = useCallback(async (id, val) => {
+  const handleChange = (id, val) => {
     const num = parseFloat(val)
     if (isNaN(num)) return
-    setTaux(prev => ({ ...prev, [id]: { ...prev[id], taux: num } }))
-    setTauxDB(prev => ({ ...prev, [id]: num }))
-    setSaving(prev => ({ ...prev, [id]: true }))
+    setLocalTaux(prev => ({ ...prev, [id]: { ...prev[id], taux: num } }))
+    setPending(prev => ({ ...prev, [id]: num }))
+  }
+
+  const handleValider = async (id) => {
+    const num = pending[id]
+    if (num === undefined) return
+    setSaving(true)
     await updateTaux(id, num)
-    setSaving(prev => ({ ...prev, [id]: false }))
-  }, [setTauxDB])
+    setTauxDB(prev => ({ ...prev, [id]: num }))
+    setPending(prev => { const n = { ...prev }; delete n[id]; return n })
+    setSaving(false)
+  }
 
-  if (!taux) return <div style={{padding:'2rem', color:'var(--text-secondary)'}}>Chargement des taux...</div>
+  if (!localTaux) return <div style={{padding:'2rem', color:'var(--text-secondary)'}}>Chargement des taux...</div>
 
-  const rows = Object.values(taux).filter(r => r.id !== 'mal1')
-  const rsiRows = rows.filter(r => !['ret1','ret2','retc1','retc2','inv'].includes(r.id))
-  const cavecRows = rows.filter(r => ['ret1','ret2','retc1','retc2','inv'].includes(r.id))
-  const displayRows = regime === 'URSSAF CAVEC' ? rsiRows : rows
+  const allRows = Object.values(localTaux).filter(r => r.id !== 'mal1')
+  const rsiRows = allRows.filter(r => !['ret1','ret2','retc1','retc2','inv'].includes(r.id))
+  const cavecRows = allRows.filter(r => ['ret1','ret2','retc1','retc2','inv'].includes(r.id))
+  const displayRows = regime === 'URSSAF CAVEC' ? rsiRows : allRows
 
-  const TauxInput = ({ row }) => (
-    <div style={{display:'flex', alignItems:'center', gap:'4px', justifyContent:'flex-end'}}>
-      <input
-        className={styles.comptInput}
-        type="number"
-        step="0.01"
-        value={row.taux}
-        onChange={e => handleTauxChange(row.id, e.target.value)}
-        style={{width:'80px'}}
-      />
-      <span style={{fontSize:'12px', color: saving[row.id] ? 'var(--blue)' : 'var(--text-muted)'}}>
-        {saving[row.id] ? '💾' : '%'}
-      </span>
+  const TauxRow = ({ row }) => {
+    const isDirty = pending[row.id] !== undefined
+    return (
+      <tr>
+        <td>{row.label}</td>
+        <td>{row.base}</td>
+        <td className={styles.right}>
+          <div style={{display:'flex', alignItems:'center', gap:'6px', justifyContent:'flex-end'}}>
+            <input
+              className={styles.comptInput}
+              type="number"
+              step="0.01"
+              value={row.taux}
+              onChange={e => handleChange(row.id, e.target.value)}
+              style={{width:'80px', borderColor: isDirty ? 'var(--blue)' : undefined}}
+            />
+            <span style={{fontSize:'12px', color:'var(--text-muted)', minWidth:'14px'}}>%</span>
+            {isDirty && (
+              <button
+                onClick={() => handleValider(row.id)}
+                disabled={saving}
+                style={{
+                  fontSize:'11px', fontWeight:'500', padding:'3px 8px',
+                  background:'var(--blue)', color:'white', border:'none',
+                  borderRadius:'4px', cursor:'pointer', whiteSpace:'nowrap'
+                }}
+              >
+                {saving ? '...' : 'Valider'}
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+    )
+  }
+
+  const RefTable = ({ rows }) => (
+    <div className={styles.tableWrap}>
+      <table className={styles.table}>
+        <thead><tr><th>Cotisation</th><th>Base de cotisation</th><th className={styles.right}>Taux</th></tr></thead>
+        <tbody>
+          <tr><td>Maladie</td><td>En fonction du revenu (progressif)</td><td className={styles.right}>—</td></tr>
+          {rows.map(row => <TauxRow key={row.id} row={row} />)}
+        </tbody>
+      </table>
     </div>
   )
 
@@ -355,39 +387,12 @@ function Tab2({ regime, tauxDB, setTauxDB }) {
       </div>
       <div className={styles.refSection}>
         <div className={styles.sectionTitle}>Taux de cotisation par type</div>
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
-            <thead><tr><th>Cotisation</th><th>Base de cotisation</th><th className={styles.right}>Taux</th></tr></thead>
-            <tbody>
-              <tr><td>Maladie</td><td>En fonction du revenu (progressif)</td><td className={styles.right}>—</td></tr>
-              {displayRows.map(row => (
-                <tr key={row.id}>
-                  <td>{row.label}</td>
-                  <td>{row.base}</td>
-                  <td className={styles.right}><TauxInput row={row} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <RefTable rows={displayRows} />
       </div>
       {regime === 'URSSAF CAVEC' && (
         <div className={styles.refSection}>
           <div className={styles.sectionTitle}>Cotisations CAVEC</div>
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead><tr><th>Cotisation</th><th>Base de cotisation</th><th className={styles.right}>Taux</th></tr></thead>
-              <tbody>
-                {cavecRows.map(row => (
-                  <tr key={row.id}>
-                    <td>{row.label}</td>
-                    <td>{row.base}</td>
-                    <td className={styles.right}><TauxInput row={row} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <RefTable rows={cavecRows} />
         </div>
       )}
       <div className={styles.refSection}>
@@ -411,65 +416,6 @@ function Tab2({ regime, tauxDB, setTauxDB }) {
   )
 }
 
-
-function HomePage({ onStart }) {
-  const [dossier, setDossier] = useState('')
-  const [regime, setRegime] = useState('URSSAF RSI')
-
-  return (
-    <div className={styles.page}>
-      <div className={styles.homeWrap}>
-        <div className={styles.homeCard}>
-          <div className={styles.homeLogo}>
-            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect width="40" height="40" rx="10" fill="#185FA5"/>
-              <path d="M20 10L10 17v13h7v-7h6v7h7V17L20 10Z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
-              <path d="M17 23h6v7h-6z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <h1 className={styles.homeTitle}>Régularisation URSSAF 2025</h1>
-          <p className={styles.homeSubtitle}>Renseignez les informations du dossier pour commencer</p>
-          <div className={styles.homeForm}>
-            <div className={styles.homeField}>
-              <label className={styles.homeLabel}>Nom du dossier / Personne</label>
-              <input
-                className={styles.homeInput}
-                type="text"
-                placeholder="Ex : Martin Dupont"
-                value={dossier}
-                onChange={e => setDossier(e.target.value)}
-              />
-            </div>
-            <div className={styles.homeField}>
-              <label className={styles.homeLabel}>Régime social</label>
-              <select
-                className={styles.homeSelect}
-                value={regime}
-                onChange={e => setRegime(e.target.value)}
-              >
-                <option value="URSSAF RSI">URSSAF RSI</option>
-                <option value="URSSAF CAVEC">URSSAF CAVEC</option>
-              </select>
-            </div>
-            <button
-              className={styles.homeBtn}
-              disabled={!dossier.trim()}
-              onClick={() => onStart(dossier.trim(), regime)}
-            >
-              Accéder au calculateur →
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const DEFAULT_TAUX_DB = {
-  mal2: 6.50, ij: 0.50, af: 3.10,
-  ret1: 17.87, ret2: 0.72, retc1: 8.10, retc2: 9.10,
-  inv: 1.30, csgd: 6.80, csgnd: 2.90, cfp: 0.25
-}
 
 export default function App() {
   const [page, setPage] = useState('home')
@@ -523,6 +469,7 @@ export default function App() {
     </div>
   )
 }
+
 
 
 
