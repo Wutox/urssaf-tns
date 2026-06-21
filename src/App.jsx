@@ -1,6 +1,30 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import './index.css'
 import styles from './App.module.css'
+
+
+const SUPABASE_URL = 'https://hydzvtcfgryrxfwfnnca.supabase.co'
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5ZHp2dGNmZ3J5cnhmd2ZubmNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMjU2NTAsImV4cCI6MjA5NzYwMTY1MH0.xzhwOqlozQNy61zEEQ9wenpld4fbyBkDOijIfGrL6N4'
+
+async function fetchTaux() {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/taux_cotisations?select=*&order=id`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+  })
+  return res.json()
+}
+
+async function updateTaux(id, taux) {
+  await fetch(`${SUPABASE_URL}/rest/v1/taux_cotisations?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal'
+    },
+    body: JSON.stringify({ taux, updated_at: new Date().toISOString() })
+  })
+}
 
 const PASS = 47100
 const ABATTEMENT = 0.26
@@ -256,6 +280,49 @@ function Tab1({ remun, div, setRemun, setDiv, compt, setCompt, regime }) {
 }
 
 function Tab2({ regime }) {
+  const [taux, setTaux] = useState(null)
+  const [saving, setSaving] = useState({})
+
+  useEffect(() => {
+    fetchTaux().then(rows => {
+      const map = {}
+      rows.forEach(r => { map[r.id] = r })
+      setTaux(map)
+    })
+  }, [])
+
+  const handleTauxChange = useCallback(async (id, val) => {
+    const num = parseFloat(val)
+    if (isNaN(num)) return
+    setTaux(prev => ({ ...prev, [id]: { ...prev[id], taux: num } }))
+    setSaving(prev => ({ ...prev, [id]: true }))
+    await updateTaux(id, num)
+    setSaving(prev => ({ ...prev, [id]: false }))
+  }, [])
+
+  if (!taux) return <div style={{padding:'2rem', color:'var(--text-secondary)'}}>Chargement des taux...</div>
+
+  const rows = Object.values(taux).filter(r => r.id !== 'mal1')
+  const rsiRows = rows.filter(r => !['ret1','ret2','retc1','retc2','inv'].includes(r.id))
+  const cavecRows = rows.filter(r => ['ret1','ret2','retc1','retc2','inv'].includes(r.id))
+  const displayRows = regime === 'URSSAF CAVEC' ? rsiRows : rows
+
+  const TauxInput = ({ row }) => (
+    <div style={{display:'flex', alignItems:'center', gap:'4px', justifyContent:'flex-end'}}>
+      <input
+        className={styles.comptInput}
+        type="number"
+        step="0.01"
+        value={row.taux}
+        onChange={e => handleTauxChange(row.id, e.target.value)}
+        style={{width:'80px'}}
+      />
+      <span style={{fontSize:'12px', color: saving[row.id] ? 'var(--blue)' : 'var(--text-muted)'}}>
+        {saving[row.id] ? '💾' : '%'}
+      </span>
+    </div>
+  )
+
   return (
     <div>
       <div className={styles.refSection}>
@@ -279,19 +346,13 @@ function Tab2({ regime }) {
             <thead><tr><th>Cotisation</th><th>Base de cotisation</th><th className={styles.right}>Taux</th></tr></thead>
             <tbody>
               <tr><td>Maladie</td><td>En fonction du revenu (progressif)</td><td className={styles.right}>—</td></tr>
-              <tr><td>Maladie (&gt; 5 PASS)</td><td>Supérieur à 5 × PASS</td><td className={styles.right}>6,50%</td></tr>
-              <tr><td>IJ</td><td>Revenu dans la limite de 5 × PASS</td><td className={styles.right}>0,50%</td></tr>
-              <tr><td>AF</td><td>Total rémunération</td><td className={styles.right}>3,10%</td></tr>
-              {(!regime || regime === 'URSSAF RSI') && <>
-              <tr><td>Retraite base</td><td>PASS (minimum 40% PASS)</td><td className={styles.right}>17,87%</td></tr>
-              <tr><td>Retraite base (&gt; PASS)</td><td>Total rémunération − PASS</td><td className={styles.right}>0,72%</td></tr>
-              <tr><td>Retraite complémentaire</td><td>PASS</td><td className={styles.right}>8,10%</td></tr>
-              <tr><td>Retraite complémentaire</td><td>4 × PASS − 1 × PASS</td><td className={styles.right}>9,10%</td></tr>
-              <tr><td>Invalidité</td><td>PASS</td><td className={styles.right}>1,30%</td></tr>
-              </>}
-              <tr><td>CSG déductible</td><td>Total rémunération + cotisations</td><td className={styles.right}>6,80%</td></tr>
-              <tr><td>CSG non déductible</td><td>Total rémunération + cotisations</td><td className={styles.right}>2,90%</td></tr>
-              <tr><td>CFP</td><td>PASS</td><td className={styles.right}>0,25%</td></tr>
+              {displayRows.map(row => (
+                <tr key={row.id}>
+                  <td>{row.label}</td>
+                  <td>{row.base}</td>
+                  <td className={styles.right}><TauxInput row={row} /></td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -303,17 +364,18 @@ function Tab2({ regime }) {
             <table className={styles.table}>
               <thead><tr><th>Cotisation</th><th>Base de cotisation</th><th className={styles.right}>Taux</th></tr></thead>
               <tbody>
-                <tr><td>Retraite base</td><td>PASS (minimum 40% PASS)</td><td className={styles.right}>17,87%</td></tr>
-                <tr><td>Retraite base (&gt; PASS)</td><td>Total rémunération − PASS</td><td className={styles.right}>0,72%</td></tr>
-                <tr><td>Retraite complémentaire</td><td>PASS</td><td className={styles.right}>8,10%</td></tr>
-                <tr><td>Retraite complémentaire</td><td>4 × PASS − 1 × PASS</td><td className={styles.right}>9,10%</td></tr>
-                <tr><td>Invalidité</td><td>PASS</td><td className={styles.right}>1,30%</td></tr>
+                {cavecRows.map(row => (
+                  <tr key={row.id}>
+                    <td>{row.label}</td>
+                    <td>{row.base}</td>
+                    <td className={styles.right}><TauxInput row={row} /></td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
       )}
-
       <div className={styles.refSection}>
         <div className={styles.sectionTitle}>Barème progressif maladie</div>
         <div className={styles.tableWrap}>
@@ -334,6 +396,7 @@ function Tab2({ regime }) {
     </div>
   )
 }
+
 
 function HomePage({ onStart }) {
   const [dossier, setDossier] = useState('')
@@ -431,4 +494,5 @@ export default function App() {
     </div>
   )
 }
+
 
