@@ -58,7 +58,7 @@ const ROW_LABELS_RSI = {
   csgd: 'CSG déductible', csgnd: 'CSG non déductible', cfp: 'CFP',
 }
 const ROW_LABELS_CAVEC = {
-  ret1: 'Retraite base (≤ PASS)', ret2: 'Retraite base (> PASS)',
+  ret1: 'Retraite Tranche 1', ret2: 'Retraite Tranche 2',
   retc1: 'Retraite compl. (≤ PASS)', retc2: 'Retraite compl. (1–4 PASS)',
   inv: 'Invalidité',
 }
@@ -100,25 +100,16 @@ function computeOnce(remun, div, cotisB4, T, isCavec) {
   const afTaux = getAFTaux(remun)
   const afCot  = sb * afTaux
   // Bases retraite/invalidité : différentes selon RSI ou CAVEC
-  const retBase1 = isCavec
-    ? (T.retBase1_cavec !== undefined ? T.retBase1_cavec : (sb < PASS*0.1135 ? PASS*0.1135 : (sb > PASS ? PASS : sb)))
-    : (sb < PASS*0.1135 ? PASS*0.1135 : (sb > PASS ? PASS : sb))
+  // CAVEC : base = rémunération totale (sb), comme l'AF
+  const retBase1 = isCavec ? sb : (sb < PASS*0.1135 ? PASS*0.1135 : (sb > PASS ? PASS : sb))
   const retCot1  = retBase1 * (T.ret1/100)
-  const retBase2 = isCavec
-    ? (T.retBase2_cavec !== undefined ? T.retBase2_cavec : (sb > retBase1 ? sb - retBase1 : 0))
-    : (sb > retBase1 ? sb - retBase1 : 0)
+  const retBase2 = isCavec ? 0 : (sb > retBase1 ? sb - retBase1 : 0)
   const retCot2  = retBase2 * (T.ret2/100)
-  const retcBase1 = isCavec
-    ? (T.retcBase1_cavec !== undefined ? T.retcBase1_cavec : (sb > PASS ? PASS : sb))
-    : (sb > PASS ? PASS : sb)
+  const retcBase1 = isCavec ? sb : (sb > PASS ? PASS : sb)
   const retcCot1  = retcBase1 * (T.retc1/100)
-  const retcBase2 = isCavec
-    ? (T.retcBase2_cavec !== undefined ? T.retcBase2_cavec : (sb > PASS*4 ? PASS*3 : (sb > PASS ? sb - PASS : 0)))
-    : (sb > PASS*4 ? PASS*3 : (sb > PASS ? sb - PASS : 0))
+  const retcBase2 = isCavec ? 0 : (sb > PASS*4 ? PASS*3 : (sb > PASS ? sb - PASS : 0))
   const retcCot2  = retcBase2 * (T.retc2/100)
-  const invBase = isCavec
-    ? (T.invBase_cavec !== undefined ? T.invBase_cavec : (sb < PASS*0.115 ? PASS*0.115 : (sb > PASS ? PASS : sb)))
-    : (sb < PASS*0.115 ? PASS*0.115 : (sb > PASS ? PASS : sb))
+  const invBase = isCavec ? sb : (sb < PASS*0.115 ? PASS*0.115 : (sb > PASS ? PASS : sb))
   const invCot  = invBase * (T.inv/100)
   const csgdCot  = sb * (T.csgd/100)
   const csgndCot = sb * (T.csgnd/100)
@@ -547,5 +538,6 @@ export default function App() {
     </div>
   )
 }
+
 
 
