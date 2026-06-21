@@ -315,54 +315,66 @@ function Tab2({ regime, tauxDB, setTauxDB }) {
 
   const CAVEC_IDS_SET = new Set(['ret1','ret2','retc1','retc2','inv'])
 
-  const handleBaseCavecChange = (id, val) => {
-    setRows(prev => ({ ...prev, [id]: { ...prev[id], base_cavec: val } }))
-    setPending(prev => ({ ...prev, [`${id}_base_cavec`]: val }))
-  }
-
-  const handleValiderBaseCavec = async (id) => {
-    const val = pending[`${id}_base_cavec`]
-    if (val === undefined) return
-    setSaving(prev => ({ ...prev, [`${id}_bc`]: true }))
+  const saveBase = async (id, field, val) => {
     await fetch(`${SUPABASE_URL}/rest/v1/taux_cotisations?id=eq.${id}`, {
       method: 'PATCH',
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify({ base_cavec: val })
+      body: JSON.stringify({ [field]: val })
     })
-    setPending(prev => { const n = { ...prev }; delete n[`${id}_base_cavec`]; return n })
-    setSaving(prev => ({ ...prev, [`${id}_bc`]: false }))
   }
 
-  const TauxRow = ({ row, showCavecBase }) => {
+  const handleBaseChange = (id, field, val) => {
+    setRows(prev => ({ ...prev, [id]: { ...prev[id], [field]: val } }))
+    setPending(prev => ({ ...prev, [`${id}_${field}`]: val }))
+  }
+
+  const handleValiderBase = async (id, field) => {
+    const key = `${id}_${field}`
+    const val = pending[key]
+    if (val === undefined) return
+    setSaving(prev => ({ ...prev, [key]: true }))
+    await saveBase(id, field, val)
+    setPending(prev => { const n = { ...prev }; delete n[key]; return n })
+    setSaving(prev => ({ ...prev, [key]: false }))
+  }
+
+  const BaseInput = ({ id, field, value }) => {
+    const key = `${id}_${field}`
+    const isDirty = pending[key] !== undefined
+    return (
+      <div style={{display:'flex', alignItems:'center', gap:'4px', marginTop:'2px'}}>
+        <input
+          style={{fontSize:'12px', padding:'3px 6px', border:'0.5px solid', borderColor: isDirty ? 'var(--blue)' : 'var(--border)', borderRadius:'4px', background:'var(--bg-secondary)', color:'var(--text-primary)', width:'170px'}}
+          type="text"
+          value={value || ''}
+          onChange={e => handleBaseChange(id, field, e.target.value)}
+        />
+        {isDirty && (
+          <button onClick={() => handleValiderBase(id, field)} disabled={saving[key]}
+            style={{fontSize:'11px', fontWeight:'500', padding:'2px 7px', background:'var(--blue)', color:'white', border:'none', borderRadius:'4px', cursor:'pointer'}}>
+            {saving[key] ? '...' : 'Valider'}
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const TauxRow = ({ row, showDualBase }) => {
     const isDirty = pending[row.id] !== undefined
-    const isBaseDirty = pending[`${row.id}_base_cavec`] !== undefined
     return (
       <tr>
         <td>{row.label}</td>
         <td>
-          <div style={{display:'flex', flexDirection:'column', gap:'4px'}}>
-            <span style={{fontSize:'12px', color:'var(--text-muted)'}}>RSI :</span>
+          {showDualBase ? (
+            <div style={{display:'flex', flexDirection:'column', gap:'4px'}}>
+              <span style={{fontSize:'11px', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.04em'}}>RSI</span>
+              <BaseInput id={row.id} field="base_rsi" value={row.base_rsi || row.base} />
+              <span style={{fontSize:'11px', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.04em', marginTop:'4px'}}>CAVEC</span>
+              <BaseInput id={row.id} field="base_cavec" value={row.base_cavec || row.base} />
+            </div>
+          ) : (
             <span>{row.base}</span>
-            {showCavecBase && (
-              <>
-                <span style={{fontSize:'12px', color:'var(--text-muted)', marginTop:'4px'}}>CAVEC :</span>
-                <div style={{display:'flex', alignItems:'center', gap:'4px'}}>
-                  <input
-                    style={{fontSize:'13px', padding:'3px 6px', border:'0.5px solid', borderColor: isBaseDirty ? 'var(--blue)' : 'var(--border)', borderRadius:'4px', background:'var(--bg-secondary)', color:'var(--text-primary)', width:'180px'}}
-                    type="text"
-                    value={row.base_cavec || row.base}
-                    onChange={e => handleBaseCavecChange(row.id, e.target.value)}
-                  />
-                  {isBaseDirty && (
-                    <button onClick={() => handleValiderBaseCavec(row.id)} disabled={saving[`${row.id}_bc`]}
-                      style={{fontSize:'11px', fontWeight:'500', padding:'3px 8px', background:'var(--blue)', color:'white', border:'none', borderRadius:'4px', cursor:'pointer'}}>
-                      {saving[`${row.id}_bc`] ? '...' : 'Valider'}
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+          )}
         </td>
         <td className={styles.right}>
           <div style={{display:'flex', alignItems:'center', gap:'6px', justifyContent:'flex-end'}}>
@@ -393,7 +405,7 @@ function Tab2({ regime, tauxDB, setTauxDB }) {
         <thead><tr><th>Cotisation</th><th>Base de cotisation</th><th className={styles.right}>Taux</th></tr></thead>
         <tbody>
           {showMaladie && <tr><td>Maladie</td><td>En fonction du revenu (progressif)</td><td className={styles.right}>—</td></tr>}
-          {tableRows.map(row => <TauxRow key={row.id} row={row} showCavecBase={CAVEC_IDS_SET.has(row.id)} />)}
+          {tableRows.map(row => <TauxRow key={row.id} row={row} showDualBase={CAVEC_IDS_SET.has(row.id)} />)}
         </tbody>
       </table>
     </div>
@@ -535,4 +547,5 @@ export default function App() {
     </div>
   )
 }
+
 
